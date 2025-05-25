@@ -1,0 +1,190 @@
+import pygame
+import random
+import sys
+import math  # Move import here since used multiple times
+
+# === Init === #
+pygame.init()
+WIDTH, HEIGHT = 800, 800
+
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("catch apples")
+clock = pygame.time.Clock()
+font = pygame.font.SysFont(None, 48)
+
+# === Colors === #
+WHITE = (255, 255, 255)
+RED = (200, 0, 0)
+BLUE = (0, 150, 255)
+BLACK = (0, 0, 0)
+GREEN = (0, 200, 0)
+GRAY = (200, 200, 200)
+
+# === Game Settings === #
+PLAYER_WIDTH = 120  # Wider basket
+PLAYER_HEIGHT = 60
+APPLE_SIZE = 30
+high_score = 0
+
+def reset_game():
+    global player, blocks, spawn_timer, score, lives, block_speed
+    player = pygame.Rect(WIDTH // 2 - PLAYER_WIDTH // 2, HEIGHT - 80, PLAYER_WIDTH, PLAYER_HEIGHT)
+    blocks = []
+    spawn_timer = 3
+    score = 0
+    lives = 5
+    block_speed = 2  # Slower falling speed
+
+# Initialize game state
+reset_game()
+player_speed = 10
+
+def game_loop():
+    global spawn_timer, score, lives, block_speed, high_score
+
+    while True:
+        clock.tick(60)
+        # Draw cartoon sky with gradient
+        for y in range(HEIGHT):
+            shade = int(255 * (1 - y / HEIGHT))
+            sky_color = (100 + shade // 3, 180 + shade // 4, 255)
+            pygame.draw.line(screen, sky_color, (0, y), (WIDTH, y))
+
+        # Draw sun
+        pygame.draw.circle(screen, (255, 255, 0), (50, 50), 40)
+        for i in range(8):  # Sun rays
+            angle = i * 45
+            start_x = 50 + 45 * math.cos(math.radians(angle))
+            start_y = 50 + 45 * math.sin(math.radians(angle))
+            end_x = 50 + 60 * math.cos(math.radians(angle))
+            end_y = 50 + 60 * math.sin(math.radians(angle))
+            pygame.draw.line(screen, (255, 255, 0), (start_x, start_y), (end_x, end_y), 4)
+
+        # Draw cartoon clouds
+        CLOUD_COLOR = (255, 255, 255)
+        clouds = [(100, 100), (300, 150), (500, 80)]
+        for x, y in clouds:
+            # Draw puffy cloud shapes
+            sizes = [(40, 30), (50, 40), (40, 35), (45, 30)]
+            positions = [(0, 0), (-30, 10), (30, 10), (0, 20)]
+            for (w, h), (dx, dy) in zip(sizes, positions):
+                pygame.draw.ellipse(screen, CLOUD_COLOR, (x + dx, y + dy, w, h))
+
+        # Draw hills in background
+        hill_color = (60, 179, 113)
+        pygame.draw.ellipse(screen, hill_color, (0, HEIGHT - 200, 300, 200))
+        pygame.draw.ellipse(screen, hill_color, (200, HEIGHT - 180, 350, 200))
+        pygame.draw.ellipse(screen, hill_color, (400, HEIGHT - 220, 300, 200))
+
+        # Draw grass with cartoon style
+        GRASS_COLOR = (34, 179, 34)
+        grass_height = 120
+        pygame.draw.rect(screen, GRASS_COLOR, (0, HEIGHT - grass_height, WIDTH, grass_height))
+
+        # Draw cartoon flowers
+        for i in range(0, WIDTH, 60):
+            flower_y = HEIGHT - grass_height + 40
+            # Stem
+            pygame.draw.line(screen, (0, 100, 0), (i, flower_y + 20), (i, flower_y - 10), 3)
+            # Petals
+            for angle in range(0, 360, 60):
+                petal_x = i + 8 * math.cos(math.radians(angle))
+                petal_y = flower_y - 10 + 8 * math.sin(math.radians(angle))
+                pygame.draw.circle(screen, (255, 140, 0), (int(petal_x), int(petal_y)), 5)  # orange petals
+            # Center
+            pygame.draw.circle(screen, (255, 255, 0), (i, flower_y - 10), 4)  # yellow center
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return False
+            if event.type == pygame.KEYDOWN and lives <= 0:
+                if event.key == pygame.K_SPACE:
+                    reset_game()
+                    return True
+
+        if lives > 0:
+            # --- Move player --- #
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_LEFT] and player.left > 0:
+                player.move_ip(-player_speed, 0)
+            if keys[pygame.K_RIGHT] and player.right < WIDTH:
+                player.move_ip(player_speed, 0)
+
+            # --- Spawn new blocks --- #
+            spawn_timer += 1
+            if spawn_timer >= max(60 - score // 15, 40):  # Even slower spawning
+                spawn_timer = 0
+                new_block = pygame.Rect(
+                    random.randint(APPLE_SIZE, WIDTH - APPLE_SIZE),
+                    -APPLE_SIZE,
+                    APPLE_SIZE,
+                    APPLE_SIZE
+                )
+                blocks.append(new_block)
+
+            # --- Move blocks --- #
+            for block in blocks[:]:
+                block.move_ip(0, block_speed)
+                if block.colliderect(player):
+                    blocks.remove(block)
+                    score += 1
+                    block_speed = min(3 + score // 25, 8)  # Slower speed increase
+                elif block.top > HEIGHT:
+                    blocks.remove(block)
+                    lives -= 1
+
+
+
+            # Draw player basket (improved design)
+            basket_color = (139, 69, 19)  # Brown color
+            # Draw basket base
+            pygame.draw.rect(screen, basket_color, player)
+            # Draw basket weave pattern
+            for i in range(player.left, player.right, 10):
+                pygame.draw.line(screen, (101, 67, 33), (i, player.top), (i, player.bottom), 2)
+            for i in range(player.top, player.bottom, 10):
+                pygame.draw.line(screen, (101, 67, 33), (player.left, i), (player.right, i), 2)
+
+            # Draw falling apples
+            for block in blocks:
+                # Apple body (red circle)
+                pygame.draw.circle(screen, (255, 0, 0), block.center, APPLE_SIZE // 2)
+                # Apple stem
+                pygame.draw.line(screen, (101, 67, 33),
+                                 (block.centerx, block.top),
+                                 (block.centerx, block.top - 10), 3)
+                # Apple leaf
+                pygame.draw.ellipse(screen, (34, 139, 34),
+                                    (block.centerx + 3, block.top - 12, 8, 6))
+
+            # --- Display score, lives and high score --- #
+            score_text = font.render(f"Score: {score}", True, BLACK)
+            lives_text = font.render(f"Lives: {lives}", True, BLACK)
+            high_score_text = font.render(f"Best: {high_score}", True, BLACK)
+            screen.blit(score_text, (20, 20))
+            screen.blit(lives_text, (20, 70))
+            screen.blit(high_score_text, (20, 120))
+        else:
+            # Game Over screen
+            game_over_text = font.render("Game Over!", True, RED)
+            high_score = max(score, high_score)
+            final_score_text = font.render(f"Final Score: {score}", True, BLACK)
+            high_score_text = font.render(f"Best Score: {high_score}", True, BLACK)
+            restart_text = font.render("Press SPACE to restart", True, GREEN)
+
+            screen.blit(game_over_text, (WIDTH // 2 - game_over_text.get_width() // 2, HEIGHT // 2 - 90))
+            screen.blit(final_score_text, (WIDTH // 2 - final_score_text.get_width() // 2, HEIGHT // 2 - 30))
+            screen.blit(high_score_text, (WIDTH // 2 - high_score_text.get_width() // 2, HEIGHT // 2 + 30))
+            screen.blit(restart_text, (WIDTH // 2 - restart_text.get_width() // 2, HEIGHT // 2 + 90))
+
+        pygame.display.flip()
+
+    return False
+
+
+# Main game loop
+while game_loop():
+    pass
+
+pygame.quit()
+sys.exit()
